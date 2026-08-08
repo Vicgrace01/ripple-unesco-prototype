@@ -1,0 +1,339 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RIPPLE — Investigation Console</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = { 
+      theme: { 
+        extend: { 
+          colors: { ink:'#080b12', panel:'#111521', cyan:'#4df7ef', violet:'#a855f7', red:'#ff667d' }, 
+          boxShadow: { neon:'0 0 24px rgba(77,247,239,.18)', violet:'0 0 28px rgba(168,85,247,.22)' } 
+        } 
+      } 
+    }
+  </script>
+
+  <style>
+    * { box-sizing:border-box } 
+    body { margin:0; background:#080b12; color:#e9eef7; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; overflow-x:hidden }
+    body:before { content:""; position:fixed; inset:0; pointer-events:none; opacity:.55; background:radial-gradient(circle at 78% 12%,rgba(168,85,247,.15),transparent 26rem),radial-gradient(circle at 13% 67%,rgba(14,165,233,.11),transparent 29rem),linear-gradient(rgba(255,255,255,.018) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.018) 1px,transparent 1px); background-size:auto,auto,28px 28px,28px 28px }
+    .glass { background:linear-gradient(135deg,rgba(24,30,45,.9),rgba(11,14,23,.9)); border:1px solid rgba(151,166,196,.16); backdrop-filter:blur(16px) }
+    .scanline { position:absolute; inset:0; overflow:hidden; pointer-events:none; opacity:.22 }
+    .scanline:after{content:"";position:absolute;left:0;right:0;height:2px;background:#4df7ef;box-shadow:0 0 18px #4df7ef;animation:scan 6s linear infinite}
+    @keyframes scan{from{top:-2%}to{top:102%}}
+    .evidence { cursor:grab; transition:transform .22s ease, border-color .22s ease, box-shadow .22s ease; user-select:none }
+    .evidence:active{cursor:grabbing}
+    .evidence:hover{transform:translateY(-3px);border-color:rgba(77,247,239,.65);box-shadow:0 12px 30px rgba(0,0,0,.3),0 0 18px rgba(77,247,239,.1)}
+    .dragging{opacity:.38;transform:scale(.96)!important}
+    .drop-target{outline:2px dashed #4df7ef;outline-offset:4px}
+    .pulse{animation:pulse 1.7s ease-in-out infinite}
+    @keyframes pulse{50%{box-shadow:0 0 0 7px rgba(77,247,239,0),0 0 24px rgba(77,247,239,.3)}}
+    .message{animation:rise .35s ease both}
+    @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <script type="text/babel">
+    const {useState, useEffect} = React;
+    
+    // --- CASE DATABASE ---
+    const CASES = [
+      {
+        id: 'case-01',
+        title: "THE BRIDGE COLLAPSE",
+        subtitle: "NORTHSPAN DISTRICT / EVENT 01",
+        desc: "One fabricated assurance altered public behavior. Trace the signals that made a preventable disaster feel safe.",
+        date: "11 APR 2034 · 17:38",
+        stats: ["41 injured", "confidence compromised"],
+        solvedMsg: "You found it. The 'all clear' report was never issued by the lab. Its false certainty rippled outward.",
+        prompts: [
+          { q: "What should I verify first?", a: "Begin with provenance. Who produced the 'all clear' report, and can the original issuer confirm it?" },
+          { q: "Why did this spread?", a: "It offered a simple answer in an anxious moment. Notice how credibility was borrowed from the report's official appearance." }
+        ],
+        evidence: [
+          {id:'1a',date:'APR 02 · 08:10',type:'CIVIC DISPATCH',icon:'▣',title:'Routine inspection scheduled',body:'Municipal engineers announce a structural review after residents report a rhythmic vibration.',accent:'cyan'},
+          {id:'1b',date:'APR 05 · 14:42',type:'STRUCTURAL REPORT',icon:'⌁',title:'“Bridge passed all checks”',body:'A polished PDF circulates with an official-looking seal. The issuing lab cannot be verified.',accent:'violet',flag:true},
+          {id:'1c',date:'APR 07 · 19:26',type:'VIRAL POST · 62K SHARES',icon:'◉',title:'“Safety panic is a hoax”',body:'A local influencer cites the report to dismiss warning signs and mock concerned commuters.',accent:'red'},
+          {id:'1d',date:'APR 09 · 09:05',type:'AI SEARCH SUMMARY',icon:'✦',title:'Confident, incomplete reassurance',body:'An AI-generated answer repeats the viral claim — and cites the forged report as its source.',accent:'violet'},
+          {id:'1e',date:'APR 11 · 17:38',type:'INCIDENT LOG',icon:'⚠',title:'Northspan Bridge collapse',body:'Emergency records show traffic volume surged after public concern was waved away.',accent:'red'}
+        ],
+        success: {
+          title: "THE BRIDGE STANDS.",
+          body: "The forged report was challenged before it could become public certainty. Inspection crews closed Northspan, repaired the fatigue fracture, and the evening commute went home safely.",
+          stats: [{val:"41", label:"INJURIES AVERTED"}, {val:"1", label:"FALSE SOURCE FLAGGED"}, {val:"∞", label:"RIPPLES CHANGED"}]
+        }
+      },
+      {
+        id: 'case-02',
+        title: "THE WATER PANIC",
+        subtitle: "EASTSIDE DISTRICT / EVENT 02",
+        desc: "A routine maintenance event was weaponized by an anonymous rumor, causing citywide hoarding and leaving vulnerable citizens without water.",
+        date: "16 AUG 2034 · 09:12",
+        stats: ["shelves emptied", "mass panic"],
+        solvedMsg: "Exactly. A totally normal municipal pipe flush was given a terrifying fake narrative. Fear always spreads faster than facts.",
+        prompts: [
+          { q: "How did a normal event cause panic?", a: "Look at the leaked memo. Someone attached a scary, false explanation to a real, visible event (the discolored water)." },
+          { q: "Who is at fault here?", a: "The aggregator who published it as a 'question' bears heavy responsibility. 'Just asking questions' is a common tactic to spread unverified claims without taking blame." }
+        ],
+        evidence: [
+          {id:'2a',date:'AUG 12 · 10:00',type:'CIVIC DISPATCH',icon:'▣',title:'Scheduled pipe flushing',body:'City announces routine water main maintenance, warning of harmless, temporary water discoloration.',accent:'cyan'},
+          {id:'2b',date:'AUG 13 · 11:15',type:'LEAKED MEMO',icon:'⌁',title:'“Toxic spill cover-up”',body:'An anonymous document claims the discoloration is actually a highly toxic chemical leak from a local factory.',accent:'violet',flag:true},
+          {id:'2c',date:'AUG 14 · 08:30',type:'VIRAL POST · 85K SHARES',icon:'◉',title:'“Don\'t drink the tap water!”',body:'A community page pairs photos of rusty tap water with screenshots of the fake toxic spill memo.',accent:'red'},
+          {id:'2d',date:'AUG 15 · 14:00',type:'NEWS AGGREGATOR',icon:'✦',title:'“Is the city poisoning us?”',body:'A low-tier news site publishes the rumor as a headline question, granting the hoax massive legitimacy.',accent:'red'},
+          {id:'2e',date:'AUG 16 · 09:12',type:'INCIDENT LOG',icon:'⚠',title:'Supermarket brawls & dry taps',body:'Widespread hoarding empties grocery shelves citywide. Elderly and vulnerable residents are left without drinking water.',accent:'red'}
+        ],
+        success: {
+          title: "THE PANIC AVERTED.",
+          body: "By tracing the anonymous memo and flagging it as fake, local news aggressively debunked the rumor before it hit social media algorithms. The shelves remained stocked.",
+          stats: [{val:"10K+", label:"HOARDERS STOPPED"}, {val:"1", label:"FAKE MEMO BANNED"}, {val:"100%", label:"WATER ACCESS KEPT"}]
+        }
+      },
+      {
+        id: 'case-03',
+        title: "THE FLASH CRASH",
+        subtitle: "GLOBAL MARKETS / EVENT 03",
+        desc: "A synthesized audio clip exploited a CEO's temporary offline status, triggering algorithmic panic and retail investor ruin.",
+        date: "06 OCT 2034 · 14:05",
+        stats: ["$4B erased", "retail wipeout"],
+        solvedMsg: "Spot on. The deepfake audio was timed perfectly to exploit the CEO's silence. The bots reacted, and humans followed the bots off the cliff.",
+        prompts: [
+          { q: "Why did the market drop so fast?", a: "Look at the timeline. It wasn't humans trading first—it was algorithmic bots reacting to social media sentiment." },
+          { q: "How do we stop this one?", a: "Speed is everything. If the deepfake audio is flagged at the source, the bots never register the negative sentiment." }
+        ],
+        evidence: [
+          {id:'3a',date:'OCT 04 · 09:00',type:'PRESS RELEASE',icon:'▣',title:'CEO off-grid retreat',body:'A major tech company announces their CEO is taking a 48-hour silent meditation retreat with no devices.',accent:'cyan'},
+          {id:'3b',date:'OCT 05 · 18:22',type:'AUDIO CLIP',icon:'⌁',title:'“I\'ve been arrested”',body:'A grainy, AI-generated voice clone of the CEO confessing to wire fraud hits an anonymous financial message board.',accent:'violet',flag:true},
+          {id:'3c',date:'OCT 05 · 18:45',type:'BOT NETWORK',icon:'◉',title:'Trending: #CEOArrest',body:'Hundreds of automated accounts immediately share the audio clip, artificially forcing the topic onto trending lists.',accent:'red'},
+          {id:'3d',date:'OCT 06 · 09:30',type:'TRADING ALGORITHM',icon:'✦',title:'Sentiment drop detected',body:'Institutional AI trading bots detect the overwhelmingly negative social sentiment and automatically begin dumping shares.',accent:'violet'},
+          {id:'3e',date:'OCT 06 · 14:05',type:'MARKET LOG',icon:'⚠',title:'Retail investor wipeout',body:'The stock plummets 40% in hours. Human retail investors panic-sell at massive losses before the CEO finally logs on.',accent:'red'}
+        ],
+        success: {
+          title: "THE CRASH PREVENTED.",
+          body: "A deepfake detection tool flagged the audio within minutes of upload. Trading halts were triggered, protecting the stock price until the CEO could verify their safety.",
+          stats: [{val:"$4B", label:"VALUE RETAINED"}, {val:"1", label:"DEEPFAKE DETECTED"}, {val:"∞", label:"PORTFOLIOS SAVED"}]
+        }
+      }
+    ];
+
+    function App(){
+      const [caseIndex, setCaseIndex] = useState(0);
+      const currentCase = CASES[caseIndex];
+      
+      // Fixed scramble order to ensure the game doesn't start solved
+      const generateSeed = (ev) => [ev[2], ev[0], ev[4], ev[1], ev[3]];
+      
+      const [cards, setCards] = useState([]);
+      const [dragId, setDragId] = useState(null);
+      const [selected, setSelected] = useState(null);
+      const [chat, setChat] = useState([]);
+      const [win, setWin] = useState(false);
+      const [toast, setToast] = useState('Timeline integrity: 0%');
+      
+      // Reset state when case changes
+      useEffect(() => {
+        setCards(generateSeed(currentCase.evidence));
+        setChat([
+          {from:'ai', text:'We are not looking for a culprit. We are tracing how certainty moved.'},
+          {from:'ai', text:'Start with the first thing people were told to trust.'}
+        ]);
+        setSelected(null);
+        setWin(false);
+      }, [caseIndex]);
+      
+      // Check win condition
+      const solved = cards.length > 0 && cards.map(x=>x.id).join(',') === currentCase.evidence.map(x=>x.id).join(',');
+      
+      useEffect(()=>{ 
+        if(!cards.length) return;
+        if(solved){
+          setToast('Timeline integrity: VERIFIED'); 
+          setChat(c=>c.some(m=>m.key==='solved') ? c : [...c,{from:'ai',key:'solved',text: currentCase.solvedMsg}]);
+        } else {
+          setToast('Timeline integrity: '+Math.round(cards.filter((x,i)=>x.id===currentCase.evidence[i].id).length/5*100)+'%');
+        }
+      },[cards, solved]);
+      
+      const move = (target) => { 
+        if(!dragId || dragId === target) return; 
+        const a = [...cards];
+        const from = a.findIndex(x=>x.id===dragId);
+        const to = a.findIndex(x=>x.id===target); 
+        a.splice(to, 0, a.splice(from, 1)[0]);
+        setCards(a);
+        setDragId(null);
+      };
+      
+      const ask = (q,a) => {
+        setChat(c=>[...c,{from:'you',text:q},{from:'ai',text:a}]);
+      };
+      
+      const handleNext = () => {
+        if(caseIndex < CASES.length - 1) {
+          setCaseIndex(caseIndex + 1);
+        } else {
+          setCaseIndex(0); // loop back to start
+        }
+      };
+
+      if(win) return <Success caseData={currentCase} isLast={caseIndex === CASES.length - 1} onNext={handleNext} />;
+      if(cards.length === 0) return null; // loading state
+      
+      return (
+        <main className="min-h-screen max-w-[1600px] mx-auto p-3 md:p-5 relative">
+          <header className="glass rounded-2xl px-4 md:px-6 h-16 flex items-center justify-between mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-cyan/10 border border-cyan/50 text-cyan grid place-items-center shadow-neon text-xl">◌</div>
+              <div><h1 className="font-black tracking-[.28em] text-sm">RIPPLE</h1><p className="text-[9px] tracking-[.18em] text-slate-500">MISINFORMATION INVESTIGATION UNIT</p></div>
+            </div>
+            <div className="hidden sm:flex items-center gap-5 text-[10px] tracking-widest text-slate-400">
+              <span>CASE <b className="text-white">0{caseIndex + 1}-NS</b></span>
+              <span className="text-cyan">● LIVE SIMULATION</span>
+              <span>LVL 0{caseIndex + 1}</span>
+            </div>
+            <button className="sm:hidden text-cyan">☰</button>
+          </header>
+          
+          <div className="grid grid-cols-1 xl:grid-cols-[1fr_350px] gap-4">
+            <section className="space-y-4 min-w-0">
+              <section className="glass rounded-2xl overflow-hidden relative min-h-[230px] p-6 md:p-8 flex flex-col justify-between">
+                <div className="scanline"></div>
+                <div className="relative flex justify-between">
+                  <span className="text-[10px] tracking-[.2em] text-red">ARCHIVED CONSEQUENCE</span>
+                  <span className="text-[10px] text-slate-500">{currentCase.date}</span>
+                </div>
+                <div className="relative max-w-2xl">
+                  <p className="text-cyan text-xs tracking-[.24em] mb-3">{currentCase.subtitle}</p>
+                  <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight uppercase"><span className="text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-500">{currentCase.title}</span></h2>
+                  <p className="mt-3 text-sm text-slate-400 max-w-xl">{currentCase.desc}</p>
+                </div>
+                <div className="relative flex items-center gap-3 text-xs">
+                  <span className="w-2 h-2 bg-red rounded-full animate-pulse"></span>
+                  <span className="text-slate-400">{currentCase.stats[0]}</span><span className="text-slate-700">/</span><span className="text-slate-400">{currentCase.stats[1]}</span>
+                </div>
+              </section>
+              
+              <section className="glass rounded-2xl p-4 md:p-5">
+                <div className="flex flex-wrap gap-3 justify-between items-end mb-5">
+                  <div>
+                    <p className="text-[10px] tracking-[.2em] text-cyan">EVIDENCE BOARD</p>
+                    <h3 className="font-bold text-lg">Reconstruct the signal</h3>
+                    <p className="text-xs text-slate-500 mt-1">Drag records into the order they shaped public belief.</p>
+                  </div>
+                  <div className={'text-[10px] tracking-widest px-3 py-2 rounded-lg border '+(solved?'text-cyan border-cyan/50 bg-cyan/10':'text-slate-400 border-slate-700')}>{toast}</div>
+                </div>
+                
+                <div className="relative mb-5 hidden md:block h-px bg-gradient-to-r from-cyan/0 via-cyan/50 to-violet/0">
+                  <span className="absolute -top-1 left-0 w-2 h-2 rounded-full bg-cyan"></span>
+                  <span className="absolute -top-1 right-0 w-2 h-2 rounded-full bg-violet"></span>
+                </div>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                  {cards.map((c,i)=> (
+                    <article 
+                      key={c.id} 
+                      draggable 
+                      onDragStart={()=>setDragId(c.id)} 
+                      onDragEnd={()=>setDragId(null)} 
+                      onDragOver={e=>{e.preventDefault();e.currentTarget.classList.add('drop-target')}} 
+                      onDragLeave={e=>e.currentTarget.classList.remove('drop-target')} 
+                      onDrop={e=>{e.currentTarget.classList.remove('drop-target');move(c.id)}} 
+                      onClick={()=>setSelected(selected===c.id?null:c.id)} 
+                      className={'evidence glass rounded-xl p-3 min-h-[172px] border-l-2 '+(c.accent==='cyan'?'border-l-cyan':c.accent==='violet'?'border-l-violet':'border-l-red')+(dragId===c.id?' dragging':'')}
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="text-[10px] text-slate-500">{String(i+1).padStart(2,'0')}</span>
+                        <span className={'text-lg '+(c.accent==='cyan'?'text-cyan':c.accent==='violet'?'text-violet':'text-red')}>{c.icon}</span>
+                      </div>
+                      <p className="text-[9px] mt-3 tracking-widest text-slate-500">{c.type}</p>
+                      <h4 className="font-bold text-sm mt-1 leading-snug">{c.title}</h4>
+                      <p className="text-[10px] mt-2 leading-relaxed text-slate-400">{c.body}</p>
+                      {c.flag&&<span className="inline-block mt-2 text-[8px] tracking-widest text-red">⚑ SOURCE UNVERIFIED</span>}
+                    </article>
+                  ))}
+                </div>
+                
+                {selected && (
+                  <div className="mt-4 rounded-lg bg-slate-950/60 border border-slate-700 p-3 text-xs text-slate-300">
+                    Evidence focus: <b>{cards.find(c=>c.id===selected).title}</b> · Ask what this item claims, who made it, and what it leaves out.
+                  </div>
+                )}
+                
+                {solved && (
+                  <div className="mt-5 flex flex-col sm:flex-row gap-3 justify-between items-center rounded-xl p-4 bg-gradient-to-r from-cyan/10 to-violet/10 border border-cyan/35">
+                    <div>
+                      <p className="text-xs font-bold text-cyan">ROOT MISINFORMATION ISOLATED</p>
+                      <p className="text-xs text-slate-400 mt-1">You have correctly mapped the timeline and found the origin point.</p>
+                    </div>
+                    <button onClick={()=>setWin(true)} className="pulse shrink-0 rounded-lg px-5 py-3 bg-cyan text-slate-950 font-black text-xs tracking-[.13em] hover:bg-white transition">REWRITE REALITY →</button>
+                  </div>
+                )}
+              </section>
+            </section>
+            
+            <aside className="glass rounded-2xl flex flex-col min-h-[520px] xl:min-h-0 xl:max-h-[calc(100vh-100px)] overflow-hidden">
+              <div className="p-5 border-b border-slate-700/70 flex gap-3">
+                <div className="w-10 h-10 rounded-full bg-violet/15 border border-violet/50 grid place-items-center text-violet shadow-violet">✦</div>
+                <div><h3 className="font-bold">NOVA</h3><p className="text-[10px] text-cyan tracking-widest">AI INVESTIGATOR · ONLINE</p></div>
+              </div>
+              <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+                {chat.map((m,i)=> (
+                  <div key={i} className={'message text-xs leading-relaxed max-w-[90%] rounded-xl p-3 '+(m.from==='ai'?'bg-slate-800/90 text-slate-200 rounded-tl-sm':'bg-violet/20 border border-violet/25 ml-auto text-violet-100 rounded-tr-sm')}>
+                    {m.from==='ai'&&<p className="text-[9px] tracking-widest text-violet mb-1">NOVA</p>}{m.text}
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t border-slate-700/70">
+                <p className="text-[10px] text-slate-500 tracking-wider mb-2">INVESTIGATION PROMPTS</p>
+                <div className="flex flex-col gap-2">
+                  {currentCase.prompts.map((p, i) => (
+                     <button key={i} onClick={()=>ask(p.q, p.a)} className="text-left text-[10px] rounded-lg px-3 py-2 border border-slate-700 hover:border-cyan/60 hover:text-cyan transition">
+                       {p.q}
+                     </button>
+                  ))}
+                </div>
+              </div>
+            </aside>
+          </div>
+        </main>
+      );
+    }
+    
+    function Success({caseData, isLast, onNext}){
+      return (
+        <main className="min-h-screen grid place-items-center p-5 relative">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(77,247,239,.16),transparent_45%)]"></div>
+          <section className="glass relative text-center max-w-2xl p-8 md:p-14 rounded-3xl border-cyan/40 shadow-neon">
+            <div className="w-20 h-20 mx-auto rounded-full grid place-items-center border border-cyan bg-cyan/10 text-4xl text-cyan mb-7">✓</div>
+            <p className="text-xs text-cyan tracking-[.3em]">ALTERNATE OUTCOME ESTABLISHED</p>
+            <h1 className="text-4xl md:text-6xl font-black mt-4 uppercase">{caseData.success.title}</h1>
+            <p className="text-slate-400 mt-5 leading-relaxed">{caseData.success.body}</p>
+            <div className="grid grid-cols-3 gap-3 mt-8">
+              {caseData.success.stats.map((stat, i) => (
+                <div key={i} className="rounded-xl bg-slate-900/80 p-3">
+                  <b className="text-cyan text-xl">{stat.val}</b>
+                  <p className="text-[9px] text-slate-500 mt-1">{stat.label}</p>
+                </div>
+              ))}
+            </div>
+            <button onClick={onNext} className="mt-9 rounded-lg px-6 py-3 bg-cyan text-slate-950 font-black text-xs tracking-[.13em] hover:bg-white transition">
+              {isLast ? "↻ RESTART SIMULATION" : "NEXT CASE →"}
+            </button>
+          </section>
+        </main>
+      );
+    }
+    
+    ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+  </script>
+</body>
+</html>
